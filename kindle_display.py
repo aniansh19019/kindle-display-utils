@@ -31,7 +31,9 @@ def set_backlight(val, server):
         val = 4095
     subprocess.run("ssh " + server + ' "'+ " echo " + str(val) + " > " + BACKLIGHT_OBJECT + '"', shell=True, check=True)
     if get_actual_backlight(server) != val:
+        print("Backlight brightness not set correctly, hotfixing...")
         backlight_hotfix(server)
+        set_backlight(val, server)
 
 def get_actual_backlight(server):
     return int(subprocess.run("ssh " + server + ' "'+ " cat " + ACTUAL_BRIGHTNESS_OBJECT + '"', shell=True, check=True, capture_output=True).stdout.decode("utf-8"))
