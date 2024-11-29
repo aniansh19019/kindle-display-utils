@@ -10,11 +10,11 @@ OUTPUT_FILENAME = "display.png"
 DISPLAY_KEEPALIVE_ENABLE_COMMAND = "lipc-set-prop com.lab126.powerd preventScreenSaver 1"
 DISPLAY_KEEPALIVE_DISABLE_COMMAND = "lipc-set-prop com.lab126.powerd preventScreenSaver 0"
 
-def keep_alive(enable):
+def keep_alive(enable, server):
     if enable:
-        subprocess.run(DISPLAY_KEEPALIVE_ENABLE_COMMAND, shell=True, check=True)
+        subprocess.run("ssh " + server + " " + DISPLAY_KEEPALIVE_ENABLE_COMMAND, shell=True, check=True)
     else:
-        subprocess.run(DISPLAY_KEEPALIVE_DISABLE_COMMAND, shell=True, check=True)
+        subprocess.run("ssh " + server + " " + DISPLAY_KEEPALIVE_DISABLE_COMMAND, shell=True, check=True)
 
 
 def process_image(input_path, crop=False, rotation=0):
@@ -112,7 +112,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     # SSH into the Kindle and run the keep-alive command
-    keep_alive(True)
+    keep_alive(True, args.ssh_server)
 
     display_image(args.input_image, args.ssh_server, args.crop, args.rotate, args.negative)
     print(f"Image processed, transferred, and displayed on Kindle at {args.ssh_server}")
