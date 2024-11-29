@@ -2,6 +2,7 @@ from PIL import Image
 import os
 import subprocess
 import argparse
+import time
 
 X_RES = 1072
 Y_RES = 1448
@@ -9,12 +10,40 @@ DISPLAY_COMMAND = "eips -g {}"
 OUTPUT_FILENAME = "display.png"
 DISPLAY_KEEPALIVE_ENABLE_COMMAND = "lipc-set-prop com.lab126.powerd preventScreenSaver 1"
 DISPLAY_KEEPALIVE_DISABLE_COMMAND = "lipc-set-prop com.lab126.powerd preventScreenSaver 0"
+BACKLIGHT_OBJECT = "/sys/devices/platform/imx-i2c.0/i2c-0/0-003c/max77696-bl.0/backlight/max77696-bl/brightness"
+ACTUAL_BRIGHTNESS_OBJECT = "/sys/devices/platform/imx-i2c.0/i2c-0/0-003c/max77696-bl.0/backlight/max77696-bl/actual_brightness"
+BACKLIGHT_DRIVER = "/sys/devices/platform/imx-i2c.0/i2c-0/0-003c/max77696-bl.0/driver/"
+BACKLIGHT_NAME = "max77696-bl.0"
+
+
+def backlight_hotfix(server):
+    bind_command = "echo -n " + BACKLIGHT_NAME + " > " + BACKLIGHT_DRIVER + "bind"
+    unbind_command = "echo -n " + BACKLIGHT_NAME + " > " + BACKLIGHT_DRIVER + "unbind"
+    subprocess.run("ssh " + server + " " + '"' + bind_command + '"', shell=True, check=True)
+    subprocess.run("ssh " + server + " " + '"' + unbind_command + '"', shell=True, check=True)
+
+
+def set_backlight(val, server):
+    # val should be between 0 and 4095
+    if val < 0:
+        val = 0
+    elif val > 4095:
+        val = 4095
+    subprocess.run("ssh " + server + ' "'+ " echo " + str(val) + " > " + BACKLIGHT_OBJECT + '"', shell=True, check=True)
+    if get_actual_backlight(server) != val:
+        backlight_hotfix(server)
+
+def get_actual_backlight(server):
+    return int(subprocess.run("ssh " + server + ' "'+ " cat " + ACTUAL_BRIGHTNESS_OBJECT + '"', shell=True, check=True, capture_output=True).stdout.decode("utf-8"))
+
+def get_backlight(server):
+    return int(subprocess.run("ssh " + server + ' "'+ " cat " + BACKLIGHT_OBJECT + '"', shell=True, check=True, capture_output=True).stdout.decode("utf-8"))
 
 def keep_alive(enable, server):
     if enable:
-        subprocess.run("ssh " + server + " " + DISPLAY_KEEPALIVE_ENABLE_COMMAND, shell=True, check=True)
+        subprocess.run("ssh " + server + " "  + ' "'+ DISPLAY_KEEPALIVE_ENABLE_COMMAND + '"', shell=True, check=True)
     else:
-        subprocess.run("ssh " + server + " " + DISPLAY_KEEPALIVE_DISABLE_COMMAND, shell=True, check=True)
+        subprocess.run("ssh " + server + " " + ' "'+ DISPLAY_KEEPALIVE_DISABLE_COMMAND + '"', shell=True, check=True)
 
 
 def process_image(input_path, crop=False, rotation=0):
@@ -108,11 +137,28 @@ if __name__ == "__main__":
     parser.add_argument("-c", "--crop", action="store_true", help="Crop the image to fill the screen instead of fitting to screen")
     parser.add_argument("-n", "--negative", action="store_true", help="Display the image with negative colors")
     parser.add_argument("-f", "--force-refresh", action="store_true", help="Force a refresh of the display")
+    parser.add_argument("-a", "--keep-alive", action="store_true", help="Keep the display alive after displaying the image")
     parser.add_argument("-r", "--rotate", type=int, choices=[0, 1, 2, 3], default=0, help="Rotate the image (0: no rotation, 1: 90 degrees CW, 2: 180 degrees, 3: 270 degrees CW)")
+    # argument for bnacklight, values from 0 to 4095
+    parser.add_argument("-b", "--backlight", type=int, default=-1, help="Set the backlight brightness (0 to 4095)")
+    
 
     args = parser.parse_args()
-    # SSH into the Kindle and run the keep-alive command
-    keep_alive(True, args.ssh_server)
 
+    if args.backlight != -1:
+        set_backlight(args.backlight, args.ssh_server)
+
+    # SSH into the Kindle and run the keep-alive command
+    if args.keep_alive:
+        keep_alive(True, args.ssh_server)
+    else:
+        keep_alive(False, args.ssh_server)
+    
+    # backlight = get_actual_backlight(args.ssh_server)
+    # set_backlight(4095, args.ssh_server)
     display_image(args.input_image, args.ssh_server, args.crop, args.rotate, args.negative)
+    
+
     print(f"Image processed, transferred, and displayed on Kindle at {args.ssh_server}")
+    # time.sleep(5)
+    # set_backlight(backlight, args.ssh_server)
