@@ -1,3 +1,4 @@
+#!/usr/bin/python3.9
 import requests
 import xml.etree.ElementTree as ET
 import io
@@ -9,10 +10,11 @@ import re
 import os
 from urllib.parse import urljoin, urlparse
 import pickle
+from time import sleep
 
 
 
-BOOKS_DIR_PATH = '/mnt/us/documents/'
+BOOKS_DIR_PATH = '/mnt/us/newsletter/'
 
 try:
     from dateutil import parser as date_parser
@@ -276,6 +278,19 @@ def create_epub(feed_items, output_filename):
     epub.close()
 
 def main():
+    os.system('eips 0 1 "RSS Feed EPUB program was run."')
+
+    # Check when the script was last run using a pickle file
+    if os.path.exists('last_run.pickle'):
+        with open('last_run.pickle', 'rb') as f:
+            last_run = pickle.load(f)
+            # Compare the last run date with today's date
+            if last_run.date() == datetime.datetime.now().date():
+                print('RSS Feed EPUB program was already run today.')
+                return
+
+    # Sleep for 10 seconds before starting the program
+    sleep(10)
     # import pickle data, if exists
     global processed_articles
     if os.path.exists('processed_articles.pickle'):
@@ -321,12 +336,21 @@ def main():
             print("Continuing without sorting for this feed...")
     
     epub_filename = f'rss_newsletter_{datetime.datetime.now().strftime("%d")}.epub'
+    epub_path = os.path.join(BOOKS_DIR_PATH, epub_filename)
+    print(f"EPUB file will be saved to {epub_path}")
     
-    create_epub(all_items, epub_filename)
-    print("EPUB file 'rss_feed.epub' has been created successfully.")
+    create_epub(all_items, epub_path)
+    print("EPUB file has been created successfully.")
+    
     # Save processed articles to pickle file
     with open('processed_articles.pickle', 'wb') as f:
         pickle.dump(processed_articles, f)
+
+    # Save the date when the script was last run
+    with open('last_run.pickle', 'wb') as f:
+        pickle.dump(datetime.datetime.now(), f)
+    
+    os.system(f'eips 0 1 "EPUB file has been created successfully. Saved to {BOOKS_DIR_PATH}"')
 
 if __name__ == '__main__':
     main()
