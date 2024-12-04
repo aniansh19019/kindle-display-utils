@@ -35,6 +35,7 @@ def main():
                 display_image(OUTPUT_FILENAME, args.server, rotation=args.rotation, force_refresh=False, negative=False, crop=args.crop)
             os.remove(OUTPUT_FILENAME)
             counter += 1
+            print("frame: " + str(counter))
             
     except KeyboardInterrupt:
         print("Screen streaming stopped.")
