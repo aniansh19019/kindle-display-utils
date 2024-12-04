@@ -22,7 +22,8 @@ def parse_date(date_string):
         formats_to_try = [
             '%a, %d %b %Y %H:%M:%S %Z',
             '%a, %d %b %Y %H:%M:%S %z',
-            '%a, %d %b %Y %H:%M:%S'
+            '%a, %d %b %Y %H:%M:%S',
+            '%Y-%m-%dT%H:%M:%S%z',  # ISO 8601 format used by Atom
         ]
         for fmt in formats_to_try:
             try:
@@ -37,7 +38,7 @@ def fetch_rss(url):
         response.raise_for_status()
         return response.content  # Return bytes instead of text
     except requests.RequestException as e:
-        print(f"Error fetching RSS feed from {url}: {e}")
+        print(f"Error fetching feed from {url}: {e}")
         return None
 
 def clean_html(html_content):
@@ -60,7 +61,7 @@ def fetch_image(image_url, feed_url):
         print(f"Error fetching image from {image_url}: {e}")
         return None
 
-def parse_rss(xml_content, feed_url):
+def parse_feed(xml_content, feed_url):
     if xml_content is None:
         return []
     
@@ -71,6 +72,16 @@ def parse_rss(xml_content, feed_url):
         print(f"Error parsing XML content: {e}")
         return []
     
+    # Detect feed type (RSS or Atom)
+    if root.tag == '{http://www.w3.org/2005/Atom}feed':
+        return parse_atom(root, feed_url)
+    elif root.find('channel') is not None:
+        return parse_rss(root, feed_url)
+    else:
+        print("Error: Unable to determine feed type (RSS or Atom)")
+        return []
+
+def parse_rss(root, feed_url):
     channel = root.find('channel')
     if channel is None:
         print("Error: Unable to find 'channel' element in the RSS feed")
@@ -81,12 +92,29 @@ def parse_rss(xml_content, feed_url):
         print("Error: No 'item' elements found in the RSS feed")
         return []
     
+    return parse_items(items, feed_url, is_atom=False)
+
+def parse_atom(root, feed_url):
+    items = root.findall('{http://www.w3.org/2005/Atom}entry')
+    if not items:
+        print("Error: No 'entry' elements found in the Atom feed")
+        return []
+    
+    return parse_items(items, feed_url, is_atom=True)
+
+def parse_items(items, feed_url, is_atom):
     parsed_items = []
     for item in items:
-        title = item.find('title')
-        description = item.find('description')
-        pub_date = item.find('pubDate')
-        link = item.find('link')
+        if is_atom:
+            title = item.find('{http://www.w3.org/2005/Atom}title')
+            description = item.find('{http://www.w3.org/2005/Atom}content')
+            pub_date = item.find('{http://www.w3.org/2005/Atom}published') or item.find('{http://www.w3.org/2005/Atom}updated')
+            link = item.find('{http://www.w3.org/2005/Atom}link')
+        else:
+            title = item.find('title')
+            description = item.find('description')
+            pub_date = item.find('pubDate')
+            link = item.find('link')
         
         # Clean and escape HTML content
         title_text = html.escape(title.text) if title is not None else 'No title'
@@ -107,7 +135,7 @@ def parse_rss(xml_content, feed_url):
             'title': title_text,
             'description': clean_description,
             'pub_date': pub_date.text if pub_date is not None else 'No date',
-            'link': link.text if link is not None else '#',
+            'link': link.get('href') if is_atom and link is not None else (link.text if link is not None else '#'),
             'image': image_content,
             'image_url': image_url
         })
@@ -235,10 +263,10 @@ def main():
     
     all_items = {}
     for url in rss_urls:
-        print(f"Fetching RSS feed from {url}")
+        print(f"Fetching feed from {url}")
         xml_content = fetch_rss(url)
         if xml_content:
-            items = parse_rss(xml_content, url)
+            items = parse_feed(xml_content, url)
             if items:
                 all_items[url] = items
     
