@@ -8,11 +8,19 @@ from bs4 import BeautifulSoup
 import re
 import os
 from urllib.parse import urljoin, urlparse
+import pickle
+
+
+
+BOOKS_DIR_PATH = '/mnt/us/documents/'
 
 try:
     from dateutil import parser as date_parser
 except ImportError:
     date_parser = None
+
+# Set of processed articles
+processed_articles = set()
 
 def parse_date(date_string):
     if date_parser:
@@ -105,17 +113,29 @@ def parse_atom(root, feed_url):
 def parse_items(items, feed_url, is_atom):
     parsed_items = []
     for item in items:
+        guid = "NA"
         if is_atom:
             title = item.find('{http://www.w3.org/2005/Atom}title')
             description = item.find('{http://www.w3.org/2005/Atom}content')
             pub_date = item.find('{http://www.w3.org/2005/Atom}published') or item.find('{http://www.w3.org/2005/Atom}updated')
             link = item.find('{http://www.w3.org/2005/Atom}link')
+            guid = item.find('{http://www.w3.org/2005/Atom}id')
         else:
             title = item.find('title')
             description = item.find('description')
             pub_date = item.find('pubDate')
             link = item.find('link')
-        
+            guid = item.find('guid')
+        print(guid.text)
+
+        # Check if article has already been processed
+        if guid.text in processed_articles:
+            print(f"Skipping article with GUID {guid.text}")
+            continue
+        else:
+            processed_articles.add(guid.text)
+            print(f"Processing article with GUID {guid.text}")
+
         # Clean and escape HTML content
         title_text = html.escape(title.text) if title is not None else 'No title'
         description_text = description.text if description is not None else 'No description'
@@ -156,11 +176,15 @@ def create_epub(feed_items, output_filename):
   </rootfiles>
 </container>''')
     
+    # Generate name for epub file
+    epub_title = f'RSS Newsletter {datetime.datetime.now().strftime("%d %B %Y")}'
+    
     # Add content.opf
     content_opf = f'''<?xml version="1.0" encoding="UTF-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" unique-identifier="BookID" version="2.0">
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
-    <dc:title>RSS Feed EPUB</dc:title>
+    <dc:title>{epub_title}</dc:title>
+    <dc:creator>RSS Feed EPUB</dc:creator>
     <dc:language>en</dc:language>
     <dc:identifier id="BookID">urn:uuid:{datetime.datetime.utcnow().isoformat()}</dc:identifier>
   </metadata>
@@ -252,6 +276,12 @@ def create_epub(feed_items, output_filename):
     epub.close()
 
 def main():
+    # import pickle data, if exists
+    global processed_articles
+    if os.path.exists('processed_articles.pickle'):
+        with open('processed_articles.pickle', 'rb') as f:
+            processed_articles = pickle.load(f)
+    
     rss_urls = [
         'http://rss.cnn.com/rss/cnn_topstories.rss',
         'http://feeds.bbci.co.uk/news/rss.xml',
@@ -290,8 +320,13 @@ def main():
             print(f"Error sorting items for {url}: {e}")
             print("Continuing without sorting for this feed...")
     
-    create_epub(all_items, 'rss_feed.epub')
+    epub_filename = f'rss_newsletter_{datetime.datetime.now().strftime("%d")}.epub'
+    
+    create_epub(all_items, epub_filename)
     print("EPUB file 'rss_feed.epub' has been created successfully.")
+    # Save processed articles to pickle file
+    with open('processed_articles.pickle', 'wb') as f:
+        pickle.dump(processed_articles, f)
 
 if __name__ == '__main__':
     main()
