@@ -258,7 +258,15 @@ def main():
         'https://lwn.net/headlines/rss',
         'https://www.space.com/home/feed/site.xml',
         'https://www.newscientist.com/feed/home/?cmpid=RSS|NSNS-Home',
-        'http://www.theverge.com/rss/frontpage'
+        'http://www.theverge.com/rss/frontpage',
+        'https://feeds.arstechnica.com/arstechnica/index',
+        'https://hackaday.com/blog/feed/',
+        'https://hnrss.org/frontpage',
+        'https://www.nasa.gov/news-release/feed/',
+        'https://www.nature.com/nature.rss',
+        'https://www.producthunt.com/feed',
+        'https://kingstut.substack.com/feed',
+        'https://xistance.substack.com/feed',
     ]
     
     all_items = {}
